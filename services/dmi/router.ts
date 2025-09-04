@@ -59,15 +59,15 @@ function validateAndParseQuery(query: any): { lat: number; lon: number; whenISO:
 }
 
 /**
- * GET /api/dmi/point - Henter vind og bølgedata for et punkt
+ * GET /api/dmi/forecast - Henter vind og bølgedata for et punkt
  * Query parametre:
  * - lat: Breddegrad (påkrævet)
  * - lon: Længdegrad (påkrævet)  
  * - when: ISO tidspunkt (valgfrit, default: nu)
  */
-router.get('/point', async (req: Request, res: Response) => {
+router.get('/forecast', async (req: Request, res: Response) => {
   try {
-    console.log(`DMI point request: ${JSON.stringify(req.query)}`);
+    console.log(`DMI forecast request: ${JSON.stringify(req.query)}`);
 
     // Valider og parse query parametre
     const { lat, lon, whenISO } = validateAndParseQuery(req.query);
@@ -92,18 +92,18 @@ router.get('/point', async (req: Request, res: Response) => {
     }
 
     // Hent data fra DMI API
-    console.log(`Henter DMI data for lat=${lat}, lon=${lon}, when=${whenISO}`);
+    console.log(`Henter DMI forecast for lat=${lat}, lon=${lon}, when=${whenISO}`);
     const dmiData = await getDmiPoint(lat, lon, whenISO, apiKey);
 
     // Gem i cache
     dmiCache.set(cacheParams, dmiData);
 
     // Returner data
-    console.log('Returnerer DMI data');
+    console.log('Returnerer DMI forecast data');
     res.status(200).json(dmiData);
 
   } catch (error) {
-    console.error('Fejl i DMI point endpoint:', error);
+    console.error('Fejl i DMI forecast endpoint:', error);
 
     // Håndter forskellige fejltyper
     if (error instanceof Error) {

@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import router from './router';
+import dmiRouter from './dmi/router';
 
 // Indlæs miljøvariabler fra .env fil
 dotenv.config();
@@ -31,7 +31,7 @@ app.use((req, res, next) => {
 });
 
 // API routes
-app.use('/api/dmi', router);
+app.use('/api/dmi', dmiRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -40,7 +40,8 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     description: 'DMI Forecast EDR microservice for vind og bølgedata',
     endpoints: {
-      point: 'GET /api/dmi/point?lat=<num>&lon=<num>[&when=<ISO>]',
+      // DMI Forecast endpoints
+      forecast: 'GET /api/dmi/forecast?lat=<num>&lon=<num>[&when=<ISO>]',
       health: 'GET /api/dmi/health',
       cacheStats: 'GET /api/dmi/cache/stats',
       clearCache: 'DELETE /api/dmi/cache'
@@ -56,7 +57,7 @@ app.use('*', (req, res) => {
     message: `${req.method} ${req.originalUrl} eksisterer ikke`,
     availableEndpoints: [
       'GET /',
-      'GET /api/dmi/point',
+      'GET /api/dmi/forecast',
       'GET /api/dmi/health',
       'GET /api/dmi/cache/stats',
       'DELETE /api/dmi/cache'
@@ -82,17 +83,17 @@ app.listen(PORT, () => {
   console.log('='.repeat(50));
   console.log(`Port: ${PORT}`);
   console.log(`Miljø: ${NODE_ENV}`);
-  console.log(`API nøgle konfigureret: ${process.env.DMI_FORECASTEDR_API_KEY ? 'Ja' : 'Nej'}`);
+  console.log(`DMI Forecast API nøgle: ${process.env.DMI_FORECASTEDR_API_KEY ? 'Ja' : 'Nej'}`);
   console.log('');
   console.log('Tilgængelige endpoints:');
   console.log(`  GET  /                    - Service info`);
-  console.log(`  GET  /api/dmi/point       - Hent vind/bølgedata`);
-  console.log(`  GET  /api/dmi/health      - Health check`);
+  console.log(`  GET  /api/dmi/forecast    - Hent vind/bølgedata`);
+  console.log(`  GET  /api/dmi/health      - DMI health check`);
   console.log(`  GET  /api/dmi/cache/stats - Cache statistikker`);
   console.log(`  DELETE /api/dmi/cache     - Ryd cache`);
   console.log('');
-  console.log('Eksempel på brug:');
-  console.log(`  curl "http://localhost:${PORT}/api/dmi/point?lat=55.715&lon=12.561"`);
+  console.log('Eksempler på brug:');
+  console.log(`  curl "http://localhost:${PORT}/api/dmi/forecast?lat=55.715&lon=12.561"`);
   console.log('='.repeat(50));
 });
 

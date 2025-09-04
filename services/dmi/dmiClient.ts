@@ -53,14 +53,6 @@ interface DmiPointResponse {
   time: string;
   wind: WindData;
   waves: WaveData | null;
-  source: {
-    harmonie_collection: string;
-    wam_collection: string;
-  };
-  meta: {
-    provider: string;
-    crs: string;
-  };
 }
 
 /**
@@ -81,7 +73,13 @@ async function fetchWamNearestSea(
 ): Promise<WaveData | null> {
   const eps = 0.03; // ~3 km
   const bbox = `${(lon-eps).toFixed(4)},${(lat-eps).toFixed(4)},${(lon+eps).toFixed(4)},${(lat+eps).toFixed(4)}`;
-  const url = `${DMI_BASE_URL}/collections/${collection}/bbox?bbox=${bbox}&crs=crs84&parameter-name=significant-wave-height,mean-wave-period,mean-wave-dir&datetime=${encodeURIComponent(whenISO)}&api-key=${encodeURIComponent(apiKey)}&f=GeoJSON`;
+  
+  // Konverter tidspunkt til interval (3 timer fremad)
+  const whenDate = new Date(whenISO);
+  const endTime = new Date(whenDate.getTime() + 3 * 60 * 60 * 1000);
+  const datetimeInterval = `${whenISO}/${endTime.toISOString()}`;
+  
+  const url = `${DMI_BASE_URL}/collections/${collection}/bbox?bbox=${bbox}&crs=crs84&parameter-name=significant-wave-height,mean-wave-period,mean-wave-dir&datetime=${encodeURIComponent(datetimeInterval)}&api-key=${encodeURIComponent(apiKey)}&f=GeoJSON`;
 
   try {
     const r = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -100,9 +98,9 @@ async function fetchWamNearestSea(
         if (d2 < bestD2) {
           bestD2 = d2;
           best = {
-            hs_m: hasHs ? p['significant-wave-height'] : NaN,
-            tp_s: hasTp ? p['mean-wave-period'] : NaN,
-            dir_deg: hasDir ? p['mean-wave-dir'] : NaN
+            hs_m: hasHs ? p['significant-wave-height'] : 0,
+            tp_s: hasTp ? p['mean-wave-period'] : 0,
+            dir_deg: hasDir ? p['mean-wave-dir'] : 0
           };
         }
       }
@@ -275,12 +273,13 @@ export async function getDmiPoint(
       const tp_s = pickValue(waveCoverage, 'mean-wave-period');
       const wdir = pickValue(waveCoverage, 'mean-wave-dir');
 
-      // Inkluder bølgedata hvis vi har mindst et felt
-      if (hs_m !== undefined || tp_s !== undefined || wdir !== undefined) {
+      // Inkluder bølgedata hvis vi har alle felter med gyldige værdier
+      if (hs_m !== undefined && hs_m !== null && tp_s !== undefined && tp_s !== null && 
+          wdir !== undefined && wdir !== null && !isNaN(hs_m) && !isNaN(tp_s) && !isNaN(wdir)) {
         waves = {
-          hs_m: hs_m ?? NaN,
-          tp_s: tp_s ?? NaN,
-          dir_deg: wdir ?? NaN
+          hs_m,
+          tp_s,
+          dir_deg: wdir
         };
       }
     }
@@ -288,9 +287,15 @@ export async function getDmiPoint(
     // Fallback: punkt lå måske på land → find nærmeste havcelle via bbox
     if (!waves) {
       console.log('Prøver WAM bbox fallback for nærmeste havcelle...');
-      waves = await fetchWamNearestSea(lat, lon, whenISO, apiKey, 'wam_dw')
+      const fallbackWaves = await fetchWamNearestSea(lat, lon, whenISO, apiKey, 'wam_dw')
           || await fetchWamNearestSea(lat, lon, whenISO, apiKey, 'wam_nsb')  // alternativt domæne
           || await fetchWamNearestSea(lat, lon, whenISO, apiKey, 'wam_natlant');
+      
+      // Kun accepter fallback hvis vi har gyldige værdier (ikke 0)
+      if (fallbackWaves && 
+          fallbackWaves.hs_m > 0 && fallbackWaves.tp_s > 0 && fallbackWaves.dir_deg >= 0) {
+        waves = fallbackWaves;
+      }
     }
 
     // Byg svar objekt
@@ -302,15 +307,7 @@ export async function getDmiPoint(
         gust_ms: gust_ms || 0, // Default til 0 hvis gust data mangler
         dir_deg
       },
-      waves,
-      source: {
-        harmonie_collection: 'harmonie_dini_sf',
-        wam_collection: 'wam_dw'
-      },
-      meta: {
-        provider: 'DMI Forecast EDR',
-        crs: 'crs84'
-      }
+      waves: waves || null // Kun inkluder waves hvis vi har gyldige data
     };
 
     return response;

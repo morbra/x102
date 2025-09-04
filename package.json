@@ -2,10 +2,10 @@
   "name": "dmi-microservice",
   "version": "1.0.0",
   "description": "DMI Forecast EDR microservice for vind og bølgedata",
-  "main": "services/dmi/index.js",
+  "main": "services/index.js",
   "scripts": {
-    "start": "node services/dmi/index.js",
-    "dev": "ts-node services/dmi/index.ts",
+    "start": "node services/index.js",
+    "dev": "ts-node services/index.ts",
     "build": "tsc",
     "test": "jest"
   },

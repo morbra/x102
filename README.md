@@ -1,16 +1,23 @@
 # DMI Microservice
 
-En server-side microservice der henter middelvind, vindstød, vindretning (HARMONIE) samt signifikant bølgehøjde og middelperiode (WAM) for et punkt og tidspunkt fra DMI's Forecast EDR API.
+En server-side microservice der henter forecast data fra DMI's Forecast EDR API:
+- **Vinddata**: Middelvind, vindstød, vindretning (HARMONIE model)
+- **Bølgedata**: Signifikant bølgehøjde, middelperiode og retning (WAM model)
 
 ## Funktioner
 
+### Forecast Service (DMI EDR)
 - Henter vinddata fra DMI HARMONIE model
 - Henter bølgedata fra DMI WAM model  
 - **Bbox fallback**: Finder nærmeste havcelle hvis punkt er på land
 - In-memory cache med 5 minutters TTL
+- Intelligent fallback til multiple WAM domæner
+
+### Generelt
 - RESTful API med JSON svar
 - Fejlhåndtering og validering
 - Health check og cache statistikker
+- Modulær struktur klar til flere services
 
 ## Installation
 
@@ -18,19 +25,14 @@ En server-side microservice der henter middelvind, vindstød, vindretning (HARMO
 ```bash
 npm install
 ```
-
-2. Opret `.env` fil baseret på `env.example`:
-```bash
-cp env.example .env
-```
-
-3. Tilføj din DMI API nøgle til `.env` filen:
-```
-DMI_FORECASTEDR_API_KEY=din_api_nøgle_her
-```
-
-## Kørsel
-
+2. Opret en `.env` fil baseret på `env.example`:
+   ```bash
+   cp env.example .env
+   ```
+3. Tilføj din DMI API-nøgle til `.env` filen, fx:
+   ```
+   DMI_FORECASTEDR_API_KEY=din_api_nøgle_her
+   ```
 ### Development
 ```bash
 npm run dev
@@ -44,7 +46,9 @@ npm start
 
 ## API Endpoints
 
-### GET /api/dmi/point
+### Forecast Endpoints
+
+#### GET /api/dmi/forecast
 Henter vind og bølgedata for et specifikt punkt.
 
 **Parametre:**
@@ -54,7 +58,7 @@ Henter vind og bølgedata for et specifikt punkt.
 
 **Eksempel:**
 ```bash
-curl "http://localhost:3000/api/dmi/point?lat=55.715&lon=12.561"
+curl "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561"
 ```
 
 **Svar (200):**
@@ -65,17 +69,17 @@ curl "http://localhost:3000/api/dmi/point?lat=55.715&lon=12.561"
   "wind": { "mean_ms": 7.4, "gust_ms": 10.1, "dir_deg": 230 },
   "waves": { "hs_m": 0.6, "tp_s": 4.5, "dir_deg": 220 },
   "source": { "harmonie_collection": "harmonie_dini_sf", "wam_collection": "wam_dw" },
-  "meta": { "provider": "DMI Forecast EDR", "crs": "crs84" }
+  "meta": { "provider": "DMI", "crs": "crs84" }
 }
 ```
 
-### GET /api/dmi/health
-Health check endpoint.
+#### GET /api/dmi/health
+DMI forecast health check.
 
-### GET /api/dmi/cache/stats
+#### GET /api/dmi/cache/stats
 Cache statistikker.
 
-### DELETE /api/dmi/cache
+#### DELETE /api/dmi/cache
 Ryd cache.
 
 ## Fejlhåndtering
@@ -100,6 +104,18 @@ For bølgedata bruger service intelligent fallback:
 3. **Multiple domæner**: Prøv `wam_dw`, `wam_nsb`, `wam_natlant` i rækkefølge
 4. **Nærmeste havcelle**: Vælg celle med kortest afstand til punktet
 
+## Projektstruktur
+
+```
+services/
+├── index.ts              # Hovedserver (Express app)
+├── dmi/                  # DMI Forecast service
+│   ├── router.ts         # API routes
+│   ├── dmiClient.ts      # DMI API klient
+│   └── cache.ts          # In-memory cache
+└── [fremtidige services] # Modulær struktur
+```
+
 ## Sikkerhed
 
 - API nøgle kun server-side (ikke eksponeret til browser)
@@ -109,14 +125,20 @@ For bølgedata bruger service intelligent fallback:
 
 ## Test
 
-Test API endpoint:
+Test API endpoints:
 ```bash
-# Test med København koordinater
-curl "http://localhost:3000/api/dmi/point?lat=55.715&lon=12.561"
+# Test forecast med København koordinater
+curl "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561"
 
-# Test med specifikt tidspunkt
-curl "http://localhost:3000/api/dmi/point?lat=55.715&lon=12.561&when=2025-01-03T12:00:00Z"
+# Test forecast med specifikt tidspunkt
+curl "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561&when=2025-01-03T12:00:00Z"
 
 # Test health check
 curl "http://localhost:3000/api/dmi/health"
+
+# Test cache statistikker
+curl "http://localhost:3000/api/dmi/cache/stats"
+
+# Kør alle tests
+./test-examples.sh
 ```
