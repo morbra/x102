@@ -55,6 +55,30 @@ interface DmiPointResponse {
   waves: WaveData | null;
 }
 
+// Interface for tidsinterval data
+interface DmiIntervalData {
+  time: string;
+  wind: WindData;
+  waves: WaveData | null;
+}
+
+// Interface for interval svar
+interface DmiIntervalResponse {
+  coord: { lat: number; lon: number };
+  from: string;
+  to: string;
+  interval: string; // "1h" for 1-timers intervaller
+  data: DmiIntervalData[];
+  source: {
+    harmonie_collection: string;
+    wam_collection: string;
+  };
+  meta: {
+    provider: string;
+    crs: string;
+  };
+}
+
 /**
  * Henter WAM data fra nærmeste havcelle via bbox fallback
  * @param lat - Breddegrad
@@ -313,6 +337,188 @@ export async function getDmiPoint(
     return response;
   } catch (error) {
     console.error('Fejl ved hentning af DMI point data:', error);
+    throw error;
+  }
+}
+
+/**
+ * Henter vind og bølgedata for et specifikt punkt og tidsinterval
+ * @param lat - Breddegrad
+ * @param lon - Længdegrad  
+ * @param fromISO - Start tidspunkt (UTC)
+ * @param toISO - Slut tidspunkt (UTC)
+ * @param apiKey - DMI API nøgle
+ * @returns Promise med komplet DMI interval data
+ */
+export async function getDmiInterval(
+  lat: number,
+  lon: number,
+  fromISO: string,
+  toISO: string,
+  apiKey: string
+): Promise<DmiIntervalResponse> {
+  // Valider input parametre
+  if (typeof lat !== 'number' || typeof lon !== 'number') {
+    throw new Error('lat og lon skal være tal');
+  }
+  
+  if (lat < -90 || lat > 90) {
+    throw new Error('lat skal være mellem -90 og 90');
+  }
+  
+  if (lon < -180 || lon > 180) {
+    throw new Error('lon skal være mellem -180 og 180');
+  }
+
+  // Valider tidsinterval
+  const fromDate = new Date(fromISO);
+  const toDate = new Date(toISO);
+  
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    throw new Error('Ugyldig tidsinterval: fromISO og toISO skal være gyldige ISO datoer');
+  }
+  
+  if (fromDate >= toDate) {
+    throw new Error('fromISO skal være før toISO');
+  }
+
+  // Byg koordinat string for DMI API
+  const coords = `POINT(${lon} ${lat})`;
+  
+  // Byg datetime interval string
+  const datetimeInterval = `${fromISO}/${toISO}`;
+  
+  // HARMONIE parametre for vinddata
+  const harmParams: DmiApiParams = {
+    coords,
+    'parameter-name': 'wind-speed-10m,wind-dir-10m,gust-wind-speed-10m',
+    datetime: datetimeInterval,
+    'api-key': apiKey,
+    crs: 'crs84'
+  };
+
+  // WAM parametre for bølgedata
+  const wamParams: DmiApiParams = {
+    coords,
+    'parameter-name': 'significant-wave-height,mean-wave-period,mean-wave-dir',
+    datetime: datetimeInterval,
+    'api-key': apiKey,
+    crs: 'crs84'
+  };
+
+  try {
+    // Hent vinddata fra HARMONIE
+    console.log(`Henter vinddata for ${coords} fra ${fromISO} til ${toISO}`);
+    const windCoverage = await fetchDmiData('harmonie_dini_sf', harmParams);
+    
+    // Hent bølgedata fra WAM (kan fejle for landområder)
+    let waveCoverage: CoverageJSON | null = null;
+    try {
+      console.log(`Henter bølgedata for ${coords} fra ${fromISO} til ${toISO}`);
+      waveCoverage = await fetchDmiData('wam_dw', wamParams);
+    } catch (waveError) {
+      console.warn(`Kunne ikke hente bølgedata: ${waveError}`);
+      // Bølgedata er valgfrit, så vi fortsætter uden
+    }
+
+    // Parse vinddata for hvert tidsinterval
+    const windValues = windCoverage.ranges || {};
+    const windSpeedValues = windValues['wind-speed-10m']?.values || [];
+    const windDirValues = windValues['wind-dir-10m']?.values || [];
+    const windGustValues = windValues['gust-wind-speed-10m']?.values || windValues['gust-wind-speed']?.values || [];
+
+    // Parse bølgedata for hvert tidsinterval
+    const waveValues = waveCoverage?.ranges || {};
+    const waveHeightValues = waveValues['significant-wave-height']?.values || [];
+    const wavePeriodValues = waveValues['mean-wave-period']?.values || [];
+    const waveDirValues = waveValues['mean-wave-dir']?.values || [];
+
+    // Valider at vi har de nødvendige vinddata
+    if (windSpeedValues.length === 0 || windDirValues.length === 0) {
+      throw new Error('Manglende vinddata fra DMI API');
+    }
+
+    // Beregn antal tidsintervaller (DMI returnerer data hver time)
+    const numIntervals = Math.max(windSpeedValues.length, windDirValues.length);
+    const intervalData: DmiIntervalData[] = [];
+
+    // Generer 1-timers intervaller direkte fra DMI data
+    for (let i = 0; i < numIntervals; i++) {
+      const timeOffset = i * 60 * 60 * 1000; // 1 time i millisekunder
+      const currentTime = new Date(fromDate.getTime() + timeOffset);
+      
+      // Parse vinddata for dette tidsinterval (direkte fra DMI time-interval)
+      const mean_ms = windSpeedValues[i];
+      const dir_deg = windDirValues[i];
+      const gust_ms = windGustValues[i] || 0;
+
+      if (mean_ms === undefined || dir_deg === undefined) {
+        continue; // Spring over manglende data
+      }
+
+      // Parse bølgedata for dette tidsinterval (direkte fra DMI time-interval)
+      let waves: WaveData | null = null;
+      if (waveHeightValues[i] !== undefined && wavePeriodValues[i] !== undefined && waveDirValues[i] !== undefined) {
+        const hs_m = waveHeightValues[i];
+        const tp_s = wavePeriodValues[i];
+        const wdir = waveDirValues[i];
+
+        // Inkluder bølgedata hvis vi har alle felter med gyldige værdier
+        if (hs_m !== null && tp_s !== null && wdir !== null && 
+            !isNaN(hs_m) && !isNaN(tp_s) && !isNaN(wdir) && hs_m > 0) {
+          waves = {
+            hs_m,
+            tp_s,
+            dir_deg: wdir
+          };
+        }
+      }
+
+      // Fallback: punkt lå måske på land → find nærmeste havcelle via bbox
+      if (!waves) {
+        console.log(`Prøver WAM bbox fallback for tidsinterval ${i}...`);
+        const fallbackWaves = await fetchWamNearestSea(lat, lon, currentTime.toISOString(), apiKey, 'wam_dw')
+            || await fetchWamNearestSea(lat, lon, currentTime.toISOString(), apiKey, 'wam_nsb')
+            || await fetchWamNearestSea(lat, lon, currentTime.toISOString(), apiKey, 'wam_natlant');
+        
+        // Kun accepter fallback hvis vi har gyldige værdier (ikke 0)
+        if (fallbackWaves && 
+            fallbackWaves.hs_m > 0 && fallbackWaves.tp_s > 0 && fallbackWaves.dir_deg >= 0) {
+          waves = fallbackWaves;
+        }
+      }
+
+      intervalData.push({
+        time: currentTime.toISOString(),
+        wind: {
+          mean_ms,
+          gust_ms,
+          dir_deg
+        },
+        waves: waves || null
+      });
+    }
+
+    // Byg svar objekt
+    const response: DmiIntervalResponse = {
+      coord: { lat, lon },
+      from: fromISO,
+      to: toISO,
+      interval: "1h", // DMI data kommer hver time
+      data: intervalData,
+      source: {
+        harmonie_collection: 'harmonie_dini_sf',
+        wam_collection: 'wam_dw'
+      },
+      meta: {
+        provider: 'DMI',
+        crs: 'crs84'
+      }
+    };
+
+    return response;
+  } catch (error) {
+    console.error('Fejl ved hentning af DMI interval data:', error);
     throw error;
   }
 }

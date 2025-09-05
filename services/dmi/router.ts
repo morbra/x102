@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDmiPoint } from './dmiClient';
+import { getDmiPoint, getDmiInterval } from './dmiClient';
 import { dmiCache } from './cache';
 
 // Opret Express router
@@ -9,7 +9,8 @@ const router = Router();
 interface PointQuery {
   lat: string;
   lon: string;
-  when?: string;
+  fromwhen?: string;
+  towhen?: string;
 }
 
 /**
@@ -17,7 +18,7 @@ interface PointQuery {
  * @param query - Express query objekt
  * @returns Validerede parametre eller kaster fejl
  */
-function validateAndParseQuery(query: any): { lat: number; lon: number; whenISO: string } {
+function validateAndParseQuery(query: any): { lat: number; lon: number; fromwhenISO: string; towhenISO: string } {
   // Tjek at lat og lon er til stede
   if (!query.lat || !query.lon) {
     throw new Error('Manglende parametre: lat og lon er påkrævet');
@@ -41,21 +42,34 @@ function validateAndParseQuery(query: any): { lat: number; lon: number; whenISO:
     throw new Error('Ugyldig lon: skal være mellem -180 og 180');
   }
 
-  // Parse when parameter (valgfrit)
-  let whenISO: string;
-  if (query.when) {
-    // Valider ISO format
-    const whenDate = new Date(query.when);
-    if (isNaN(whenDate.getTime())) {
-      throw new Error('Ugyldig when: skal være gyldig ISO dato/tid');
+  // Parse tidsinterval parametre
+  let fromwhenISO: string, towhenISO: string;
+  
+  if (query.fromwhen && query.towhen) {
+    // Brug fromwhen og towhen hvis begge er angivet
+    const fromDate = new Date(query.fromwhen);
+    const toDate = new Date(query.towhen);
+    
+    if (isNaN(fromDate.getTime())) {
+      throw new Error('Ugyldig fromwhen: skal være gyldig ISO dato/tid');
     }
-    whenISO = whenDate.toISOString();
+    if (isNaN(toDate.getTime())) {
+      throw new Error('Ugyldig towhen: skal være gyldig ISO dato/tid');
+    }
+    if (fromDate >= toDate) {
+      throw new Error('fromwhen skal være før towhen');
+    }
+    
+    fromwhenISO = fromDate.toISOString();
+    towhenISO = toDate.toISOString();
   } else {
-    // Brug nuværende tid hvis when ikke er angivet
-    whenISO = new Date().toISOString();
+    // Brug nuværende tid hvis ingen parametre er angivet (default: now + 3 timer)
+    const now = new Date();
+    fromwhenISO = now.toISOString();
+    towhenISO = new Date(now.getTime() + 3 * 60 * 60 * 1000).toISOString(); // +3 timer
   }
 
-  return { lat, lon, whenISO };
+  return { lat, lon, fromwhenISO, towhenISO };
 }
 
 /**
@@ -63,14 +77,16 @@ function validateAndParseQuery(query: any): { lat: number; lon: number; whenISO:
  * Query parametre:
  * - lat: Breddegrad (påkrævet)
  * - lon: Længdegrad (påkrævet)  
- * - when: ISO tidspunkt (valgfrit, default: nu)
+ * - fromwhen: Start tidspunkt (valgfrit, kræver towhen)
+ * - towhen: Slut tidspunkt (valgfrit, kræver fromwhen)
+ * - Default: nu til nu + 3 timer hvis ingen tidsinterval angives
  */
 router.get('/forecast', async (req: Request, res: Response) => {
   try {
     console.log(`DMI forecast request: ${JSON.stringify(req.query)}`);
 
     // Valider og parse query parametre
-    const { lat, lon, whenISO } = validateAndParseQuery(req.query);
+    const { lat, lon, fromwhenISO, towhenISO } = validateAndParseQuery(req.query);
 
     // Tjek om DMI API nøgle er tilgængelig
     const apiKey = process.env.DMI_FORECASTEDR_API_KEY;
@@ -83,7 +99,7 @@ router.get('/forecast', async (req: Request, res: Response) => {
     }
 
     // Tjek cache først
-    const cacheParams = { lat, lon, whenISO };
+    const cacheParams = { lat, lon, fromwhenISO, towhenISO };
     const cachedData = dmiCache.get(cacheParams);
     
     if (cachedData) {
@@ -92,8 +108,8 @@ router.get('/forecast', async (req: Request, res: Response) => {
     }
 
     // Hent data fra DMI API
-    console.log(`Henter DMI forecast for lat=${lat}, lon=${lon}, when=${whenISO}`);
-    const dmiData = await getDmiPoint(lat, lon, whenISO, apiKey);
+    console.log(`Henter DMI forecast for lat=${lat}, lon=${lon}, from=${fromwhenISO}, to=${towhenISO}`);
+    const dmiData = await getDmiInterval(lat, lon, fromwhenISO, towhenISO, apiKey);
 
     // Gem i cache
     dmiCache.set(cacheParams, dmiData);

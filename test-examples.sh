@@ -31,9 +31,9 @@ echo "4b. Test landområde med bbox fallback (Roskilde):"
 curl -s "http://localhost:3000/api/dmi/forecast?lat=55.641&lon=12.080" | jq .
 echo ""
 
-# Test 5: Med specifikt tidspunkt
-echo "5. Test med specifikt tidspunkt:"
-curl -s "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561&when=2025-01-03T12:00:00Z" | jq .
+# Test 5: Med custom tidsinterval
+echo "5. Test med custom tidsinterval:"
+curl -s "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561&fromwhen=2025-01-03T12:00:00Z&towhen=2025-01-04T12:00:00Z" | jq .
 echo ""
 
 # Test 6: Ugyldig lat
@@ -46,9 +46,9 @@ echo "7. Test manglende lon:"
 curl -s "http://localhost:3000/api/dmi/forecast?lat=55.715" | jq .
 echo ""
 
-# Test 8: Ugyldig when parameter
-echo "8. Test ugyldig when parameter:"
-curl -s "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561&when=invalid-date" | jq .
+# Test 8: Ugyldig tidsinterval parameter
+echo "8. Test ugyldig tidsinterval parameter:"
+curl -s "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561&fromwhen=invalid-date&towhen=2025-01-03T12:00:00Z" | jq .
 echo ""
 
 # Test 9: Ikke-eksisterende endpoint

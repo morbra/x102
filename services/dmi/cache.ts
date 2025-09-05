@@ -11,7 +11,9 @@ interface CacheEntry<T> {
 interface CacheParams {
   lat: number;
   lon: number;
-  whenISO: string;
+  whenISO?: string; // For backward compatibility
+  fromwhenISO?: string; // For interval requests
+  towhenISO?: string; // For interval requests
   collection?: string;
 }
 
@@ -30,7 +32,17 @@ class DmiCache {
    */
   private generateKey(params: CacheParams): string {
     // Byg string fra parametre for at skabe unik nøgle
-    const keyString = `${params.lat},${params.lon},${params.whenISO},${params.collection || 'all'}`;
+    let keyString: string;
+    
+    if (params.fromwhenISO && params.towhenISO) {
+      // For interval requests
+      keyString = `${params.lat},${params.lon},${params.fromwhenISO},${params.towhenISO},${params.collection || 'all'}`;
+    } else if (params.whenISO) {
+      // For single point requests (backward compatibility)
+      keyString = `${params.lat},${params.lon},${params.whenISO},${params.collection || 'all'}`;
+    } else {
+      throw new Error('Cache params skal have enten whenISO eller fromwhenISO/towhenISO');
+    }
     
     // Generer SHA-256 hash for at få konsistent nøgle
     return crypto.createHash('sha256').update(keyString).digest('hex');

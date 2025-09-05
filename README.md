@@ -54,20 +54,43 @@ Henter vind og bølgedata for et specifikt punkt.
 **Parametre:**
 - `lat` (påkrævet): Breddegrad (-90 til 90)
 - `lon` (påkrævet): Længdegrad (-180 til 180)
-- `when` (valgfrit): ISO tidspunkt (UTC), default: nu
+- `fromwhen` (valgfrit): Start tidspunkt (UTC), kræver `towhen`
+- `towhen` (valgfrit): Slut tidspunkt (UTC), kræver `fromwhen`
+- Default: nu til nu + 3 timer hvis ingen tidsinterval angives
 
-**Eksempel:**
+**Eksempler:**
 ```bash
+# Default: nu til nu + 3 timer
 curl "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561"
+
+# Custom tidsinterval
+curl "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561&fromwhen=2025-01-03T12:00:00Z&towhen=2025-01-04T12:00:00Z"
 ```
 
 **Svar (200):**
 ```json
 {
   "coord": { "lat": 55.715, "lon": 12.561 },
-  "time": "2025-01-03T12:00:00Z",
-  "wind": { "mean_ms": 7.4, "gust_ms": 10.1, "dir_deg": 230 },
-  "waves": { "hs_m": 0.6, "tp_s": 4.5, "dir_deg": 220 },
+  "from": "2025-01-03T12:00:00Z",
+  "to": "2025-01-03T15:00:00Z",
+  "interval": "1h",
+  "data": [
+    {
+      "time": "2025-01-03T12:00:00Z",
+      "wind": { "mean_ms": 7.4, "gust_ms": 10.1, "dir_deg": 230 },
+      "waves": { "hs_m": 0.6, "tp_s": 4.5, "dir_deg": 220 }
+    },
+    {
+      "time": "2025-01-03T13:00:00Z",
+      "wind": { "mean_ms": 7.4, "gust_ms": 10.1, "dir_deg": 230 },
+      "waves": { "hs_m": 0.6, "tp_s": 4.5, "dir_deg": 220 }
+    },
+    {
+      "time": "2025-01-03T14:00:00Z",
+      "wind": { "mean_ms": 7.4, "gust_ms": 10.1, "dir_deg": 230 },
+      "waves": { "hs_m": 0.6, "tp_s": 4.5, "dir_deg": 220 }
+    }
+  ],
   "source": { "harmonie_collection": "harmonie_dini_sf", "wam_collection": "wam_dw" },
   "meta": { "provider": "DMI", "crs": "crs84" }
 }
@@ -127,11 +150,11 @@ services/
 
 Test API endpoints:
 ```bash
-# Test forecast med København koordinater
+# Test forecast med København koordinater (default: nu + 3 timer)
 curl "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561"
 
-# Test forecast med specifikt tidspunkt
-curl "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561&when=2025-01-03T12:00:00Z"
+# Test forecast med custom tidsinterval
+curl "http://localhost:3000/api/dmi/forecast?lat=55.715&lon=12.561&fromwhen=2025-01-03T12:00:00Z&towhen=2025-01-04T12:00:00Z"
 
 # Test health check
 curl "http://localhost:3000/api/dmi/health"
