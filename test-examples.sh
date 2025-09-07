@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Test eksempler for DMI Microservice
+# Test eksempler for DMI & ORC Microservice
 # Kør disse kommandoer efter at have startet serveren med: npm run dev
 
-echo "=== DMI Microservice Test Eksempler ==="
+echo "=== DMI & ORC Microservice Test Eksempler ==="
 echo ""
 
 # Test 1: Service info
@@ -56,11 +56,50 @@ echo "9. Test ikke-eksisterende endpoint:"
 curl -s "http://localhost:3000/api/dmi/nonexistent" | jq .
 echo ""
 
+echo "=== ORC Optimal Tests ==="
+echo ""
+
+# Test 10: ORC health check
+echo "10. Test ORC health check:"
+curl -s "http://localhost:3000/api/orc/health" | jq .
+echo ""
+
+# Test 11: ORC optimal med refNo
+echo "11. Test ORC optimal med refNo:"
+curl -s "http://localhost:3000/api/orc/optimal?tws=12&refNo=034200028W9" | jq .
+echo ""
+
+# Test 12: ORC optimal med sailNo
+echo "12. Test ORC optimal med sailNo:"
+curl -s "http://localhost:3000/api/orc/optimal?tws=12&sailNo=GRE-49128" | jq .
+echo ""
+
+# Test 13: ORC optimal med yachtName og countryId
+echo "13. Test ORC optimal med yachtName og countryId:"
+curl -s "http://localhost:3000/api/orc/optimal?tws=12&yachtName=OUSYRA&countryId=GRE" | jq .
+echo ""
+
+# Test 14: ORC cache statistikker
+echo "14. Test ORC cache statistikker:"
+curl -s "http://localhost:3000/api/orc/cache/stats" | jq .
+echo ""
+
+# Test 15: ORC ugyldig TWS
+echo "15. Test ORC ugyldig TWS:"
+curl -s "http://localhost:3000/api/orc/optimal?tws=999&refNo=034200028W9" | jq .
+echo ""
+
+# Test 16: ORC manglende identifier
+echo "16. Test ORC manglende identifier:"
+curl -s "http://localhost:3000/api/orc/optimal?tws=12" | jq .
+echo ""
+
 echo "=== Test færdig ==="
 echo ""
-echo "For at teste med rigtig DMI data:"
-echo "1. Få DMI API nøgle fra: https://confluence.govcloud.dk/pages/viewpage.action?pageId=26476698"
+echo "For at teste med rigtig data:"
+echo "1. DMI: Få DMI API nøgle fra: https://confluence.govcloud.dk/pages/viewpage.action?pageId=26476698"
 echo "2. Tilføj nøglen til .env filen:"
 echo "   DMI_FORECASTEDR_API_KEY=din_forecast_nøgle_her"
 echo "3. Genstart serveren: npm run dev"
 echo "4. Kør test 4 igen for at se rigtig vejrdata"
+echo "5. ORC: Bruger offentlig API, ingen nøgle nødvendig"

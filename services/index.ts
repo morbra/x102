@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import dmiRouter from './dmi/router';
+import orcRouter from './orc/router';
 
 // Indlæs miljøvariabler fra .env fil
 dotenv.config();
@@ -32,19 +33,29 @@ app.use((req, res, next) => {
 
 // API routes
 app.use('/api/dmi', dmiRouter);
+app.use('/api/orc', orcRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    service: 'DMI Microservice',
+    service: 'DMI & ORC Microservice',
     version: '1.0.0',
-    description: 'DMI Forecast EDR microservice for vind og bølgedata',
+    description: 'DMI Forecast EDR og ORC optimal microservice',
     endpoints: {
       // DMI Forecast endpoints
-      forecast: 'GET /api/dmi/forecast?lat=<num>&lon=<num>[&when=<ISO>]',
-      health: 'GET /api/dmi/health',
-      cacheStats: 'GET /api/dmi/cache/stats',
-      clearCache: 'DELETE /api/dmi/cache'
+      dmi: {
+        forecast: 'GET /api/dmi/forecast?lat=<num>&lon=<num>[&fromwhen=<ISO>][&towhen=<ISO>]',
+        health: 'GET /api/dmi/health',
+        cacheStats: 'GET /api/dmi/cache/stats',
+        clearCache: 'DELETE /api/dmi/cache'
+      },
+      // ORC Optimal endpoints
+      orc: {
+        optimal: 'GET /api/orc/optimal?tws=<num>&[refNo=<str>|sailNo=<str>|yachtName=<str>&countryId=<str>]',
+        health: 'GET /api/orc/health',
+        cacheStats: 'GET /api/orc/cache/stats',
+        clearCache: 'POST /api/orc/cache/clear'
+      }
     },
     timestamp: new Date().toISOString()
   });
@@ -60,7 +71,11 @@ app.use('*', (req, res) => {
       'GET /api/dmi/forecast',
       'GET /api/dmi/health',
       'GET /api/dmi/cache/stats',
-      'DELETE /api/dmi/cache'
+      'DELETE /api/dmi/cache',
+      'GET /api/orc/optimal',
+      'GET /api/orc/health',
+      'GET /api/orc/cache/stats',
+      'POST /api/orc/cache/clear'
     ]
   });
 });
@@ -79,7 +94,7 @@ app.use((error: Error, req: express.Request, res: express.Response, next: expres
 // Start server
 app.listen(PORT, () => {
   console.log('='.repeat(50));
-  console.log('DMI Microservice startet');
+  console.log('DMI & ORC Microservice startet');
   console.log('='.repeat(50));
   console.log(`Port: ${PORT}`);
   console.log(`Miljø: ${NODE_ENV}`);
@@ -90,10 +105,15 @@ app.listen(PORT, () => {
   console.log(`  GET  /api/dmi/forecast    - Hent vind/bølgedata`);
   console.log(`  GET  /api/dmi/health      - DMI health check`);
   console.log(`  GET  /api/dmi/cache/stats - Cache statistikker`);
-  console.log(`  DELETE /api/dmi/cache     - Ryd cache`);
+  console.log(`  DELETE /api/dmi/cache     - Ryd DMI cache`);
+  console.log(`  GET  /api/orc/optimal     - Beregn optimale sejlvinkler`);
+  console.log(`  GET  /api/orc/health      - ORC health check`);
+  console.log(`  GET  /api/orc/cache/stats - ORC cache statistikker`);
+  console.log(`  POST /api/orc/cache/clear - Ryd ORC cache`);
   console.log('');
   console.log('Eksempler på brug:');
   console.log(`  curl "http://localhost:${PORT}/api/dmi/forecast?lat=55.715&lon=12.561"`);
+  console.log(`  curl "http://localhost:${PORT}/api/orc/optimal?tws=12&refNo=034200028W9"`);
   console.log('='.repeat(50));
 });
 
